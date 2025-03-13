@@ -3,8 +3,14 @@ const WebSocket = require('ws');
 const fs = require('fs');
 const { exec } = require('child_process');
 const path = require('path');
+const { PrismaClient } = require('@prisma/client');
 
+const prisma = new PrismaClient();
 const app = express();
+
+// Add middleware to parse JSON request bodies
+app.use(express.json());
+
 const server = app.listen(3000, () => {
   console.log('Server is running on http://localhost:3000');
 });
@@ -19,7 +25,6 @@ fs.readFile(deviceMappingsPath, 'utf8', (err, data) => {
     return;
   }
   deviceMappings = JSON.parse(data);
-//   console.log('Loaded device mappings:', deviceMappings);
 });
 
 // Set up WebSocket server
@@ -28,19 +33,13 @@ const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws) => {
   console.log('Client connected');
 
-  ws.on('message', (message) => {
+  ws.on('message', async (message) => {
     const device = JSON.parse(message);
-    // console.log('Received device:', device.deviceName);
-    // console.log("type of Receive device: ", typeof(device.deviceName));
-    
+
     // Ensure deviceMappings.devices is an array
     if (Array.isArray(deviceMappings.devices)) {
-    //   console.log('Device mappings:', deviceMappings.devices);
       const mapping = deviceMappings.devices.find(d => d.deviceName.replace(/[^a-zA-Z]/g, '') == device.deviceName.replace(/[^a-zA-Z]/g, ''));
       if (mapping) {
-        // console.log("deviceMappings.device.deviceName:", deviceMappings.devices[0].deviceName.replace(/[^a-zA-Z]/g, ''));
-        // console.log("device.deviceName:", device.deviceName.replace(/[^a-zA-Z]/g, ''));
-        // console.log('Found mapping:', mapping);  
         const commands = `cd "/Users/carey/PersonalProjs/sleepisoverato"`;
 
         exec(commands, (error, stdout, stderr) => {
@@ -67,6 +66,21 @@ wss.on('connection', (ws) => {
         client.send(JSON.stringify(device));
       }
     });
+
+    // Save device to the database
+    await prisma.device.create({
+      data: {
+        name: device.deviceName,
+        rssi: device.rssi,
+        distance: device.distanceProxyInMetres,
+        user: {
+          connectOrCreate: {
+            where: { email: 'default@example.com' }, // Replace with actual user identification logic
+            create: { email: 'default@example.com', name: 'Default User' }
+          }
+        }
+      },
+    });
   });
 
   ws.on('close', () => {
@@ -79,3 +93,71 @@ app.use(express.static('public'));
 
 // Serve the dist directory
 app.use('/dist', express.static(path.join(__dirname, 'dist')));
+
+// CRUD functions for Devices table
+app.get('/devices', async (req, res) => {
+  try {
+    const devices = await prisma.device.findMany();
+    res.json(devices);
+  } catch (error) {
+    console.error('Error fetching devices:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/devices', async (req, res) => {
+  try {
+    const { name, rssi, distance, userEmail } = req.body;
+    if (!name || !rssi || !distance || !userEmail) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const device = await prisma.device.create({
+      data: {
+        name,
+        rssi,
+        distance,
+        user: {
+          connectOrCreate: {
+            where: { email: userEmail },
+            create: { email: userEmail, name: 'Default User' }
+          }
+        }
+      },
+    });
+    res.json(device);
+  } catch (error) {
+    console.error('Error creating device:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/devices/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, rssi, distance } = req.body;
+    if (!name || !rssi || !distance) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const device = await prisma.device.update({
+      where: { id: parseInt(id) },
+      data: { name, rssi, distance },
+    });
+    res.json(device);
+  } catch (error) {
+    console.error('Error updating device:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/devices/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.device.delete({
+      where: { id: parseInt(id) },
+    });
+    res.json({ message: 'Device deleted' });
+  } catch (error) {
+    console.error('Error deleting device:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
