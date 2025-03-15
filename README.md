@@ -53,7 +53,11 @@ export $(grep -v '^#' .env | xargs) && npx prisma migrate deploy
 npx prisma generate
 npx prisma studio
 ```
-**note: DO NOT delete migrations folder, ever. `git pull` and rebase on `main` branch if migrations are missing locally.**
+#### Database Notes
+- DO NOT delete migrations folder, ever. `git pull` and rebase on `main` branch if migrations are missing locally.
+- \d "Device" in psql to show all tables, locally. 
+- ignore `Message: Error in Prisma Client request: ` if you see that your local database schema has updated after running db migrations - this is just a warning that your production database has not been updated. 
+
 
 ## What's Deployed and Where?
 | Branch | Frontend  | Backend | Db |
@@ -86,10 +90,10 @@ npx prisma studio
 - [x] implement jquery + plain js for search bar
 
 ## TODO - backend
-- [ ] implement lambda function for name search to interface betwn AWS gateway and Elastic Search
+- [ ] implement API function for name search to interface betwn AWS gateway and Elastic Search
 - [ ] implement prisma client and connect to supabase
 - [ ] run migration for `Device` table
-- [ ] implement CRUD fns for Device
+- [x] implement CRUD fns for Device
 - [ ] auth? for collab in future 
   - [ ] google/github auth
 - [ ] LOGGING: to see which error occurs instead of a generic category of errors 5XX or 4XX, or some frontend ReactJS error.
