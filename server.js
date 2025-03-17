@@ -68,20 +68,20 @@ wss.on('connection', (ws) => {
     });
 
     // Save device to the database
-    await prisma.device.create({
-      data: {
-        name: device.deviceName,
-        rssi: device.rssi,
-        distance: device.distanceProxyInMetres,
-        user: {
-          connectOrCreate: {
-            where: { email: 'default@example.com' }, // Replace with actual user identification logic
-            create: { email: 'default@example.com', name: 'Default User' }
-          }
-        }
-      },
-    });
-  });
+  //   await prisma.device.create({
+  //     data: {
+  //       name: device.deviceName,
+  //       rssi: device.rssi,
+  //       distance: device.distanceProxyInMetres,
+  //       user: {
+  //         connectOrCreate: {
+  //           where: { email: 'default@example.com' }, // Replace with actual user identification logic
+  //           create: { email: 'default@example.com', name: 'Default User' }
+  //         }
+  //       }
+  //     },
+  //   });
+  // });
 
   ws.on('close', () => {
     console.log('Client disconnected');
