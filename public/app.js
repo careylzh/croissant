@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import ReactDOM from 'react-dom';
+import ReactDOM from 'react-dom/client';
 import Onboarding from './Onboarding';
 import BluetoothDevices from './BluetoothDevices';
+import { Provider } from 'react-redux';
+import store from '../redux/store.js'; // Adjusted to match default export
+import { useDispatch } from 'react-redux';
+import { setUserDevices } from '../redux/devicesSlice';
+import ReadyScreen from './ReadyScreen'; // Import the new ReadyScreen component
 
-const rootElement = document.getElementById('root');
+const root = ReactDOM.createRoot(document.getElementById('root'));
+
+console.log(store.getState());
 
 function App() {
   const [email, setEmail] = useState(null);
@@ -12,6 +19,8 @@ function App() {
   const [ws, setWs] = useState(null);
   const [devices, setDevices] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [isReady, setIsReady] = useState(false); // Track if the user is ready
+  const dispatch = useDispatch();
 
   useEffect(() => {
     if (email) {
@@ -87,6 +96,16 @@ function App() {
     setEmail(email);
   };
 
+  const handleDeviceSelection = (selectedDevices) => {
+    console.log('Selected devices:', selectedDevices); // Log selected devices for debugging
+    dispatch(setUserDevices({ email, devices: selectedDevices })); // Store in Redux
+    setIsReady(true); // Navigate to the next page
+  };
+
+  if (isReady) {
+    return <ReadyScreen />; // Render the next page
+  }
+
   if (!email) {
     return <Onboarding onEmailSubmit={handleEmailSubmit} />;
   }
@@ -94,7 +113,10 @@ function App() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white">
       <h1 className="text-4xl font-bold mb-6">Bluetooth Connection</h1>
-      <BluetoothDevices devices={devices} />
+      <BluetoothDevices 
+        devices={devices} 
+        onFinishSelection={handleDeviceSelection} 
+      />
       <div className="mt-6 w-full max-w-2xl">
         <h2 className="text-2xl font-bold mb-4">Logs</h2>
         <ul className="list-none">
@@ -109,4 +131,11 @@ function App() {
   );
 }
 
-ReactDOM.render(<App />, rootElement);
+root.render(
+  <React.StrictMode>
+    <Provider store={store}>
+      {/* Wrap your App component with Provider and pass the store */}
+      <App />
+    </Provider>
+  </React.StrictMode>
+);

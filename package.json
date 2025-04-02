@@ -22,12 +22,14 @@
   "dependencies": {
     "@abandonware/noble": "^1.9.2-25",
     "@prisma/client": "^6.4.1",
+    "@reduxjs/toolkit": "^2.6.1",
     "@supabase/supabase-js": "^2.49.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "prisma": "^6.4.1",
-    "react": "^17.0.2",
-    "react-dom": "^17.0.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-redux": "^9.2.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

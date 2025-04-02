@@ -27,6 +27,6 @@ model Device {
 model User {
   userId      Int      @id @default(autoincrement())
   email   String   @unique
-  name    String?
+  firstName    String?
   devices Device[]
 }
