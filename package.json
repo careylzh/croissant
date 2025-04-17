@@ -26,9 +26,12 @@
     "@supabase/supabase-js": "^2.49.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "madge": "^8.0.0",
     "prisma": "^6.4.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-force-graph": "^1.47.6",
+    "react-force-graph-2d": "^1.27.1",
     "react-redux": "^9.2.0",
     "ws": "^8.18.0"
   },
