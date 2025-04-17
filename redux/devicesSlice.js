@@ -11,8 +11,10 @@ const devicesSlice = createSlice({
       state.selectedDevices = action.payload;
     },
     setUserDevices: (state, action) => {
-      const { email, devices } = action.payload;
-      state.userDevices[email] = devices;
+      const { firstName, email, devices } = action.payload;
+      state.userDevices[email] = {
+        firstName,
+        devices}
     },
   },
 });

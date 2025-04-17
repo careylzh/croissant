@@ -14,6 +14,7 @@ console.log(store.getState());
 
 function App() {
   const [email, setEmail] = useState(null);
+  const [firstName, setFirstName] = useState(''); // State for first name
   const [deviceName, setDeviceName] = useState('');
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
   const [ws, setWs] = useState(null);
@@ -92,13 +93,14 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleEmailSubmit = (email) => {
+  const handleEmailSubmit = (email, firstName) => {
     setEmail(email);
+    setFirstName(firstName); // Store first name in state
   };
 
   const handleDeviceSelection = (selectedDevices) => {
     console.log('Selected devices:', selectedDevices); // Log selected devices for debugging
-    dispatch(setUserDevices({ email, devices: selectedDevices })); // Store in Redux
+    dispatch(setUserDevices({ firstName, email, devices: selectedDevices })); // Store in Redux
     setIsReady(true); // Navigate to the next page
   };
 
