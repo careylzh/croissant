@@ -209,135 +209,17 @@ app.get('/commits', async (req, res) => {
   }
 });
 
-// Modified analyze-repo endpoint to handle commit-based analysis
-app.post('/analyze-repo', async (req, res) => {
-  const { repoPath, branchName, startCommit } = req.body;
-
-  if (!repoPath || !branchName) {
-    return res.status(400).json({ error: 'Repository path and branch name are required' });
-  }
-
-  try {
-    // Change to the repository directory
-    await execAsync(`cd "${repoPath}"`);
-
-    // Switch to the specified branch
-    await execAsync(`git checkout ${branchName}`);
-
-    // Get the list of changed files from the start commit to the current branch
-    const diffCommand = startCommit 
-      ? `git diff --name-only ${startCommit}...${branchName}`
-      : `git diff --name-only main...${branchName}`;
-    
-    const { stdout: changedFiles } = await execAsync(diffCommand);
-    const changedFilesList = changedFiles.split('\n').filter(Boolean);
-
-    // Get the commit history
-    const logCommand = startCommit
-      ? `git log --pretty=format:"%H|%an|%ad|%s" ${startCommit}...${branchName}`
-      : `git log --pretty=format:"%H|%an|%ad|%s" main...${branchName}`;
-    
-    const { stdout: commitHistory } = await execAsync(logCommand);
-
-    // Build the call graph for changed files
-    const callGraph = await madge(repoPath, {
-      baseDir: repoPath,
-      fileExtensions: ['js', 'jsx', 'ts', 'tsx'],
-      excludeRegExp: [/node_modules/],
-    });
-
-    // Process the call graph into a format suitable for visualization
-    const graphData = {
-      nodes: [],
-      links: []
-    };
-
-    // Add nodes for all files in the call graph
-    const allFiles = callGraph.obj();
-    const fileIds = new Map();
-    let nodeId = 0;
-
-    // First, add all changed files as nodes
-    changedFilesList.forEach(file => {
-      // Normalize the file path to match madge's format
-      const normalizedFile = file.startsWith('./') ? file : `./${file}`;
-      
-      if (allFiles[normalizedFile]) {
-        fileIds.set(normalizedFile, nodeId);
-        graphData.nodes.push({
-          id: nodeId,
-          name: path.basename(file),
-          path: path.join(repoPath, file),
-          isChanged: true
-        });
-        nodeId++;
-      }
-    });
-
-    // Then add their dependencies
-    changedFilesList.forEach(file => {
-      const normalizedFile = file.startsWith('./') ? file : `./${file}`;
-      
-      if (allFiles[normalizedFile]) {
-        const sourceId = fileIds.get(normalizedFile);
-        allFiles[normalizedFile].forEach(dep => {
-          if (!fileIds.has(dep)) {
-            fileIds.set(dep, nodeId);
-            graphData.nodes.push({
-              id: nodeId,
-              name: path.basename(dep),
-              path: path.join(repoPath, dep.replace('./', '')),
-              isChanged: false
-            });
-            nodeId++;
-          }
-          graphData.links.push({
-            source: sourceId,
-            target: fileIds.get(dep)
-          });
-        });
-      }
-    });
-
-    // Process commit history
-    const commits = commitHistory.split('\n').map(commit => {
-      const [hash, author, date, message] = commit.split('|');
-      return { hash, author, date, message };
-    });
-
-    res.json({
-      commits,
-      changedFiles: changedFilesList,
-      graphData
-    });
-  } catch (error) {
-    console.error('Error analyzing repository:', error);
-    res.status(500).json({ error: 'Failed to analyze repository' });
-  }
-});
-
-// New endpoint for opening files
-app.post('/open-file', async (req, res) => {
-  const { filePath } = req.body;
-
-  if (!filePath) {
-    return res.status(400).json({ error: 'File path is required' });
-  }
-
-  try {
-    await execAsync(`open "${filePath}"`);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error opening file:', error);
-    res.status(500).json({ error: 'Failed to open file' });
-  }
-});
-
 // New endpoint to get repositories
 app.get('/repositories', async (req, res) => {
   try {
     // Get user's home directory
     const homeDir = process.env.HOME || process.env.USERPROFILE;
+    
+    // Add the current repository to the list
+    const currentRepo = {
+      path: __dirname,
+      name: 'Current Repository (croissant)'
+    };
     
     // Use a more reliable command to find git repositories
     const { stdout } = await execAsync(
@@ -365,6 +247,9 @@ app.get('/repositories', async (req, res) => {
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name));
+
+    // Add current repository at the beginning of the list
+    repositories.unshift(currentRepo);
 
     // Log for debugging
     console.log('Found repositories:', repositories);
@@ -406,5 +291,174 @@ app.get('/branches', async (req, res) => {
       error: 'Failed to get branches',
       details: error.message 
     });
+  }
+});
+
+// Modified analyze-repo endpoint to handle commit-based analysis
+app.post('/analyze-repo', async (req, res) => {
+  const { repoPath, branchName, startCommit } = req.body;
+
+  if (!repoPath || !branchName) {
+    return res.status(400).json({ error: 'Repository path and branch name are required' });
+  }
+
+  try {
+    // Change to the repository directory
+    await execAsync(`cd "${repoPath}"`);
+
+    // Stash any local changes before switching branches
+    try {
+      await execAsync('git stash');
+    } catch (stashError) {
+      console.log('No changes to stash or stash failed:', stashError.message);
+    }
+
+    // Switch to the specified branch
+    try {
+      await execAsync(`git checkout ${branchName}`);
+    } catch (checkoutError) {
+      console.error('Failed to checkout branch:', checkoutError.message);
+      return res.status(500).json({ 
+        error: 'Failed to switch branches',
+        details: checkoutError.message
+      });
+    }
+
+    // Get the list of changed files from the start commit to the current branch
+    const diffCommand = startCommit 
+      ? `git diff --name-only ${startCommit}...${branchName}`
+      : `git diff --name-only main...${branchName}`;
+    
+    const { stdout: changedFiles } = await execAsync(diffCommand);
+    const changedFilesList = changedFiles.split('\n').filter(Boolean);
+
+    // Get the commit history
+    const logCommand = startCommit
+      ? `git log --pretty=format:"%H|%an|%ad|%s" ${startCommit}...${branchName}`
+      : `git log --pretty=format:"%H|%an|%ad|%s" main...${branchName}`;
+    
+    const { stdout: commitHistory } = await execAsync(logCommand);
+
+    // Build the call graph for changed files
+    let callGraph;
+    try {
+      callGraph = await madge(repoPath, {
+        baseDir: repoPath,
+        fileExtensions: ['js', 'jsx', 'ts', 'tsx'],
+        excludeRegExp: [/node_modules/],
+        detectiveOptions: {
+          ts: {
+            skipTypeImports: true
+          }
+        }
+      });
+    } catch (madgeError) {
+      console.error('Error generating call graph:', madgeError);
+      return res.status(500).json({ 
+        error: 'Failed to generate call graph',
+        details: madgeError.message
+      });
+    }
+
+    // Process the call graph into a format suitable for visualization
+    const graphData = {
+      nodes: [],
+      links: []
+    };
+
+    // Add nodes for all files in the call graph
+    const allFiles = callGraph.obj();
+    console.log('Call graph files:', Object.keys(allFiles));
+    console.log('Changed files:', changedFilesList);
+
+    const fileIds = new Map();
+    let nodeId = 0;
+
+    // First, add all changed files as nodes
+    changedFilesList.forEach(file => {
+      // Normalize the file path to match madge's format
+      const normalizedFile = file.startsWith('./') ? file : `./${file}`;
+      console.log('Processing changed file:', normalizedFile);
+      
+      if (allFiles[normalizedFile]) {
+        fileIds.set(normalizedFile, nodeId);
+        graphData.nodes.push({
+          id: nodeId,
+          name: path.basename(file),
+          path: path.join(repoPath, file),
+          isChanged: true
+        });
+        nodeId++;
+      } else {
+        console.log('File not found in call graph:', normalizedFile);
+      }
+    });
+
+    // Then add their dependencies
+    changedFilesList.forEach(file => {
+      const normalizedFile = file.startsWith('./') ? file : `./${file}`;
+      
+      if (allFiles[normalizedFile]) {
+        const sourceId = fileIds.get(normalizedFile);
+        allFiles[normalizedFile].forEach(dep => {
+          if (!fileIds.has(dep)) {
+            fileIds.set(dep, nodeId);
+            graphData.nodes.push({
+              id: nodeId,
+              name: path.basename(dep),
+              path: path.join(repoPath, dep.replace('./', '')),
+              isChanged: false
+            });
+            nodeId++;
+          }
+          graphData.links.push({
+            source: sourceId,
+            target: fileIds.get(dep)
+          });
+        });
+      }
+    });
+
+    // Process commit history
+    const commits = commitHistory.split('\n').map(commit => {
+      const [hash, author, date, message] = commit.split('|');
+      return { hash, author, date, message };
+    });
+
+    // Pop the stash to restore local changes
+    try {
+      await execAsync('git stash pop');
+    } catch (stashPopError) {
+      console.log('No stash to pop or pop failed:', stashPopError.message);
+    }
+
+    res.json({
+      commits,
+      changedFiles: changedFilesList,
+      graphData
+    });
+  } catch (error) {
+    console.error('Error analyzing repository:', error);
+    res.status(500).json({ 
+      error: 'Failed to analyze repository',
+      details: error.message
+    });
+  }
+});
+
+// New endpoint for opening files
+app.post('/open-file', async (req, res) => {
+  const { filePath } = req.body;
+
+  if (!filePath) {
+    return res.status(400).json({ error: 'File path is required' });
+  }
+
+  try {
+    await execAsync(`open "${filePath}"`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error opening file:', error);
+    res.status(500).json({ error: 'Failed to open file' });
   }
 });
