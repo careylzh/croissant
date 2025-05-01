@@ -172,9 +172,46 @@ app.delete('/devices/:id', async (req, res) => {
   }
 });
 
-// New endpoint for repository analysis
+// New endpoint to get commits for a repository
+app.get('/commits', async (req, res) => {
+  const { repoPath, branchName } = req.query;
+
+  if (!repoPath || !branchName) {
+    return res.status(400).json({ error: 'Repository path and branch name are required' });
+  }
+
+  try {
+    // Get commit history for the branch
+    const { stdout } = await execAsync(
+      `cd "${repoPath}" && git log --pretty=format:"%H|%an|%ad|%s" ${branchName}`
+    );
+
+    const commits = stdout
+      .split('\n')
+      .filter(Boolean)
+      .map(commit => {
+        const [hash, author, date, message] = commit.split('|');
+        return {
+          hash,
+          author,
+          date,
+          message: message.trim()
+        };
+      });
+
+    res.json(commits);
+  } catch (error) {
+    console.error('Error getting commits:', error);
+    res.status(500).json({ 
+      error: 'Failed to get commits',
+      details: error.message 
+    });
+  }
+});
+
+// Modified analyze-repo endpoint to handle commit-based analysis
 app.post('/analyze-repo', async (req, res) => {
-  const { repoPath, branchName } = req.body;
+  const { repoPath, branchName, startCommit } = req.body;
 
   if (!repoPath || !branchName) {
     return res.status(400).json({ error: 'Repository path and branch name are required' });
@@ -184,12 +221,23 @@ app.post('/analyze-repo', async (req, res) => {
     // Change to the repository directory
     await execAsync(`cd "${repoPath}"`);
 
-    // Get the latest commit hash
-    const { stdout: commitHash } = await execAsync('git rev-parse HEAD');
+    // Switch to the specified branch
+    await execAsync(`git checkout ${branchName}`);
+
+    // Get the list of changed files from the start commit to the current branch
+    const diffCommand = startCommit 
+      ? `git diff --name-only ${startCommit}...${branchName}`
+      : `git diff --name-only main...${branchName}`;
     
-    // Get the list of changed files in the latest commit
-    const { stdout: changedFiles } = await execAsync('git diff-tree --no-commit-id --name-only -r HEAD');
+    const { stdout: changedFiles } = await execAsync(diffCommand);
     const changedFilesList = changedFiles.split('\n').filter(Boolean);
+
+    // Get the commit history
+    const logCommand = startCommit
+      ? `git log --pretty=format:"%H|%an|%ad|%s" ${startCommit}...${branchName}`
+      : `git log --pretty=format:"%H|%an|%ad|%s" main...${branchName}`;
+    
+    const { stdout: commitHistory } = await execAsync(logCommand);
 
     // Build the call graph for changed files
     const callGraph = await madge(repoPath, {
@@ -211,12 +259,15 @@ app.post('/analyze-repo', async (req, res) => {
 
     // First, add all changed files as nodes
     changedFilesList.forEach(file => {
-      if (allFiles[file]) {
-        fileIds.set(file, nodeId);
+      // Normalize the file path to match madge's format
+      const normalizedFile = file.startsWith('./') ? file : `./${file}`;
+      
+      if (allFiles[normalizedFile]) {
+        fileIds.set(normalizedFile, nodeId);
         graphData.nodes.push({
           id: nodeId,
           name: path.basename(file),
-          path: file,
+          path: path.join(repoPath, file),
           isChanged: true
         });
         nodeId++;
@@ -225,15 +276,17 @@ app.post('/analyze-repo', async (req, res) => {
 
     // Then add their dependencies
     changedFilesList.forEach(file => {
-      if (allFiles[file]) {
-        const sourceId = fileIds.get(file);
-        allFiles[file].forEach(dep => {
+      const normalizedFile = file.startsWith('./') ? file : `./${file}`;
+      
+      if (allFiles[normalizedFile]) {
+        const sourceId = fileIds.get(normalizedFile);
+        allFiles[normalizedFile].forEach(dep => {
           if (!fileIds.has(dep)) {
             fileIds.set(dep, nodeId);
             graphData.nodes.push({
               id: nodeId,
               name: path.basename(dep),
-              path: dep,
+              path: path.join(repoPath, dep.replace('./', '')),
               isChanged: false
             });
             nodeId++;
@@ -246,8 +299,14 @@ app.post('/analyze-repo', async (req, res) => {
       }
     });
 
+    // Process commit history
+    const commits = commitHistory.split('\n').map(commit => {
+      const [hash, author, date, message] = commit.split('|');
+      return { hash, author, date, message };
+    });
+
     res.json({
-      commitHash: commitHash.trim(),
+      commits,
       changedFiles: changedFilesList,
       graphData
     });
@@ -271,5 +330,81 @@ app.post('/open-file', async (req, res) => {
   } catch (error) {
     console.error('Error opening file:', error);
     res.status(500).json({ error: 'Failed to open file' });
+  }
+});
+
+// New endpoint to get repositories
+app.get('/repositories', async (req, res) => {
+  try {
+    // Get user's home directory
+    const homeDir = process.env.HOME || process.env.USERPROFILE;
+    
+    // Use a more reliable command to find git repositories
+    const { stdout } = await execAsync(
+      `cd "${homeDir}" && find . -type d -name ".git" -maxdepth 3 -exec sh -c 'echo "$(dirname "{}")"' \\; 2>/dev/null || true`
+    );
+
+    // Process and filter the repositories
+    const repositories = stdout
+      .split('\n')
+      .filter(Boolean)
+      .map(repoPath => {
+        // Convert relative path to absolute path
+        const absolutePath = path.resolve(homeDir, repoPath);
+        return {
+          path: absolutePath,
+          name: path.basename(absolutePath)
+        };
+      })
+      .filter(repo => {
+        // Verify it's actually a git repository
+        try {
+          return fs.existsSync(path.join(repo.path, '.git'));
+        } catch (e) {
+          return false;
+        }
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    // Log for debugging
+    console.log('Found repositories:', repositories);
+
+    res.json(repositories);
+  } catch (error) {
+    console.error('Error getting repositories:', error);
+    res.status(500).json({ 
+      error: 'Failed to get repositories',
+      details: error.message 
+    });
+  }
+});
+
+// New endpoint to get branches for a repository
+app.get('/branches', async (req, res) => {
+  const { repoPath } = req.query;
+
+  if (!repoPath) {
+    return res.status(400).json({ error: 'Repository path is required' });
+  }
+
+  try {
+    // Change to the repository directory and get all branches
+    const { stdout } = await execAsync(
+      `cd "${repoPath}" && git branch -a | sed 's/^[ *]//' | sed 's/remotes\\/origin\\///' | sort -u`
+    );
+
+    const branches = stdout
+      .split('\n')
+      .filter(Boolean)
+      .map(branch => branch.trim())
+      .filter(branch => !branch.startsWith('HEAD'));
+
+    res.json(branches);
+  } catch (error) {
+    console.error('Error getting branches:', error);
+    res.status(500).json({ 
+      error: 'Failed to get branches',
+      details: error.message 
+    });
   }
 });
