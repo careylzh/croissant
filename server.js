@@ -324,24 +324,65 @@ app.post('/analyze-repo', async (req, res) => {
       });
     }
 
-    // Get the list of changed files from the start commit to the current branch
-    const diffCommand = startCommit 
-      ? `git diff --name-only ${startCommit}...${branchName}`
-      : `git diff --name-only main...${branchName}`;
-    
-    const { stdout: changedFiles } = await execAsync(diffCommand);
-    const changedFilesList = changedFiles.split('\n').filter(Boolean);
+    // If a start commit is provided, verify it exists
+    if (startCommit) {
+      try {
+        await execAsync(`git cat-file -e ${startCommit}`);
+      } catch (commitError) {
+        return res.status(400).json({
+          error: 'Invalid commit hash',
+          details: 'The specified commit does not exist in this repository'
+        });
+      }
+    }
+
+    // Get the list of changed files
+    let changedFilesList = [];
+    try {
+      if (startCommit) {
+        // If we have a start commit, get changes between that commit and HEAD
+        const { stdout: changedFiles } = await execAsync(`git diff --name-only ${startCommit} HEAD`);
+        changedFilesList = changedFiles.split('\n').filter(Boolean);
+      } else {
+        // If no start commit, get changes between main and current branch
+        const { stdout: changedFiles } = await execAsync(`git diff --name-only main HEAD`);
+        changedFilesList = changedFiles.split('\n').filter(Boolean);
+      }
+    } catch (diffError) {
+      console.error('Error getting changed files:', diffError);
+      return res.status(500).json({
+        error: 'Failed to get changed files',
+        details: diffError.message
+      });
+    }
 
     // Get the commit history
-    const logCommand = startCommit
-      ? `git log --pretty=format:"%H|%an|%ad|%s" ${startCommit}...${branchName}`
-      : `git log --pretty=format:"%H|%an|%ad|%s" main...${branchName}`;
-    
-    const { stdout: commitHistory } = await execAsync(logCommand);
+    let commitHistory = '';
+    try {
+      if (startCommit) {
+        const { stdout } = await execAsync(`git log --pretty=format:"%H|%an|%ad|%s" ${startCommit}..HEAD`);
+        commitHistory = stdout;
+      } else {
+        const { stdout } = await execAsync(`git log --pretty=format:"%H|%an|%ad|%s" main..HEAD`);
+        commitHistory = stdout;
+      }
+    } catch (logError) {
+      console.error('Error getting commit history:', logError);
+      return res.status(500).json({
+        error: 'Failed to get commit history',
+        details: logError.message
+      });
+    }
 
     // Build the call graph for changed files
     let callGraph;
     try {
+      // First, let's log what files madge can find
+      const { stdout: findFiles } = await execAsync(
+        `cd "${repoPath}" && find . -type f -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" | grep -v "node_modules"`
+      );
+      console.log('Available files for madge:', findFiles.split('\n').filter(Boolean));
+
       callGraph = await madge(repoPath, {
         baseDir: repoPath,
         fileExtensions: ['js', 'jsx', 'ts', 'tsx'],
@@ -380,8 +421,18 @@ app.post('/analyze-repo', async (req, res) => {
       const normalizedFile = file.startsWith('./') ? file : `./${file}`;
       console.log('Processing changed file:', normalizedFile);
       
-      if (allFiles[normalizedFile]) {
-        fileIds.set(normalizedFile, nodeId);
+      // Try different path formats to match madge's output
+      const possiblePaths = [
+        normalizedFile,
+        file,
+        path.relative(repoPath, path.join(repoPath, file)),
+        path.join(repoPath, file)
+      ];
+      
+      const matchingPath = possiblePaths.find(p => allFiles[p]);
+      
+      if (matchingPath) {
+        fileIds.set(matchingPath, nodeId);
         graphData.nodes.push({
           id: nodeId,
           name: path.basename(file),
@@ -389,18 +440,27 @@ app.post('/analyze-repo', async (req, res) => {
           isChanged: true
         });
         nodeId++;
+        console.log('Found matching path:', matchingPath);
       } else {
-        console.log('File not found in call graph:', normalizedFile);
+        console.log('File not found in call graph. Tried paths:', possiblePaths);
       }
     });
 
     // Then add their dependencies
     changedFilesList.forEach(file => {
       const normalizedFile = file.startsWith('./') ? file : `./${file}`;
+      const possiblePaths = [
+        normalizedFile,
+        file,
+        path.relative(repoPath, path.join(repoPath, file)),
+        path.join(repoPath, file)
+      ];
       
-      if (allFiles[normalizedFile]) {
-        const sourceId = fileIds.get(normalizedFile);
-        allFiles[normalizedFile].forEach(dep => {
+      const matchingPath = possiblePaths.find(p => allFiles[p]);
+      
+      if (matchingPath) {
+        const sourceId = fileIds.get(matchingPath);
+        allFiles[matchingPath].forEach(dep => {
           if (!fileIds.has(dep)) {
             fileIds.set(dep, nodeId);
             graphData.nodes.push({
