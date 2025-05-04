@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
+import * as d3 from 'd3';
 
 const ReadyScreen = () => {
   const [repositories, setRepositories] = useState([]);
@@ -152,9 +153,9 @@ const ReadyScreen = () => {
       const distance = 40;
       const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
       
-      graphData.fx = node.x;
-      graphData.fy = node.y;
-      graphData.fz = node.z;
+      // graphData.fx = node.x;
+      // graphData.fy = node.y;
+      // graphData.fz = node.z;
     } catch (err) {
       console.error('Error opening file:', err);
       setError(`Failed to open file: ${err.message}`);
@@ -285,6 +286,38 @@ const ReadyScreen = () => {
                 onNodeClick={handleNodeClick}
                 linkDirectionalParticles={2}
                 linkDirectionalParticleSpeed={0.004}
+                nodeCanvasObject={(node, ctx, globalScale) => {
+                  const label = node.name;
+                  const fontSize = 12/globalScale;
+                  ctx.font = `${fontSize}px Sans-Serif`;
+                  const textWidth = ctx.measureText(label).width;
+                  const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2);
+
+                  // Draw node circle
+                  ctx.beginPath();
+                  ctx.arc(node.x, node.y, 5, 0, 2 * Math.PI, false);
+                  ctx.fillStyle = node.isChanged ? '#ff6b6b' : '#4dabf7';
+                  ctx.fill();
+
+                  // Draw label background with improved visibility
+                  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+                  ctx.fillRect(
+                    node.x - bckgDimensions[0] / 2,
+                    node.y + 8,
+                    bckgDimensions[0],
+                    bckgDimensions[1]
+                  );
+
+                  // Draw label text with improved contrast
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'middle';
+                  ctx.fillStyle = 'white';
+                  ctx.fillText(
+                    label,
+                    node.x,
+                    node.y + 8 + bckgDimensions[1] / 2
+                  );
+                }}
               />
             </div>
 
