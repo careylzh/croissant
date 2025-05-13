@@ -45,23 +45,16 @@ wss.on('connection', (ws) => {
 
   ws.on('message', async (message) => {
     const device = JSON.parse(message);
+    console.log('Received device:', device.deviceName);
+
 
     // Ensure deviceMappings.devices is an array
     if (Array.isArray(deviceMappings.devices)) {
       const mapping = deviceMappings.devices.find(d => d.deviceName.replace(/[^a-zA-Z]/g, '') == device.deviceName.replace(/[^a-zA-Z]/g, ''));
       if (mapping) {
-        const commands = `cd "/Users/carey/PersonalProjs/sleepisoverato"`;
 
-        exec(commands, (error, stdout, stderr) => {
-          if (error) {
-            console.error(`Error executing commands: ${error}`);
-            ws.send(JSON.stringify({ type: 'error', message: `Error: ${error.message}` }));
-            return;
-          }
-          console.log(`stdout: ${stdout}`);
-          console.error(`stderr: ${stderr}`);
-          ws.send(JSON.stringify({ type: 'success', message: `Command executed successfully: ${stdout}` }));
-        });
+        ws.send(JSON.stringify({ type: 'success', message: `Device received: ${device.deviceName}` }));
+
       } else {
         ws.send(JSON.stringify({ type: 'error', message: 'Device not recognized' }));
       }

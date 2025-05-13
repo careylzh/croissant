@@ -24,7 +24,7 @@ function App() {
   const dispatch = useDispatch();
 
   useEffect(() => {
-    if (email) {
+    if (!email) {
       // Connect to WebSocket server
       const websocket = new WebSocket('ws://localhost:3000');
       setWs(websocket);
@@ -36,30 +36,27 @@ function App() {
       websocket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          // console.log(`Received message from server: ${event.data}. Data type: ${data.type}`);
+          console.log('Received WebSocket message:', data);
+          
           if (data.type === 'log') {
             setLogs((prevLogs) => [...prevLogs, data.message]);
           } else {
             setDevices((prevDevices) => {
+              // Create a new array to ensure state update
               const now = Date.now();
-              const updatedDevices = prevDevices.map(device => {
-                if (device.deviceName === data.deviceName) {
-                  return { ...device, ...data, timestamp: now };
-                }
-                return device;
-              });
-
-              const isNewDevice = !updatedDevices.some(device => device.deviceName === data.deviceName);
-              if (isNewDevice) {
-                console.log(`New device found: ${data.deviceName}`);
-                updatedDevices.push({ ...data, timestamp: now });
+              const deviceIndex = prevDevices.findIndex(d => d.deviceName === data.deviceName);
+              
+              if (deviceIndex === -1) {
+                // New device
+                console.log('Adding new device:', data.deviceName);
+                return [...prevDevices, { ...data, timestamp: now }];
+              } else {
+                // Update existing device
+                const updatedDevices = [...prevDevices];
+                updatedDevices[deviceIndex] = { ...data, timestamp: now };
+                return updatedDevices;
               }
-
-              // Sort devices: devices received within the past 10 seconds stay at the top
-              // Sort devices alphabetically by deviceName
-              return updatedDevices.sort((a, b) => a.deviceName.localeCompare(b.deviceName));
             });
-            console.log(`Updated device list: `, devices);
           }
         } catch (error) {
           console.error('Error processing WebSocket message:', error);
