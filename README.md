@@ -53,11 +53,15 @@ export $(grep -v '^#' .env | xargs) && npx prisma migrate deploy
 npx prisma generate
 npx prisma studio
 ```
+<<<<<<< HEAD
 #### Database Notes
 - DO NOT delete migrations folder, ever. `git pull` and rebase on `main` branch if migrations are missing locally.
 - \d "Device" in psql to show all tables, locally. 
 - ignore `Message: Error in Prisma Client request: ` if you see that your local database schema has updated after running db migrations - this is just a warning that your production database has not been updated. 
 
+=======
+**note: DO NOT delete migrations folder, ever. `git pull` and rebase on `main` branch if migrations are missing locally.**
+>>>>>>> 7111aeb (update readme)
 
 ## What's Deployed and Where?
 | Branch | Frontend  | Backend | Db |
