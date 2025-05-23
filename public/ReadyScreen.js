@@ -15,6 +15,94 @@ const ReadyScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
   const [isLoadingCommits, setIsLoadingCommits] = useState(false);
+  const [ws, setWs] = useState(null);
+  const [wsConnected, setWsConnected] = useState(false);
+
+  // Set up WebSocket connection
+  useEffect(() => {
+    let websocket = null;
+    let reconnectTimeout = null;
+
+    const connectWebSocket = () => {
+      try {
+        websocket = new WebSocket('ws://localhost:3000');
+        setWs(websocket);
+
+        websocket.onopen = () => {
+          console.log('Connected to WebSocket server');
+          setWsConnected(true);
+        };
+
+        websocket.onmessage = async (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('Received WebSocket message:', data);
+            
+            if (data.deviceName === "Carey's Apple Watch") {
+              console.log("Carey's Apple Watch detected, triggering auto-analysis");
+              
+              // Fetch device mappings
+              const response = await fetch('/deviceMappings.json');
+              const mappings = await response.json();
+              const watchMapping = mappings.devices.find(m => m.deviceName === "Carey's Apple Watch");
+              
+              if (watchMapping) {
+                console.log('Found mapping for watch:', watchMapping);
+                // Find the repository object that matches the path
+                const repo = repositories.find(r => r.path === watchMapping.repoPath);
+                if (repo) {
+                  setSelectedRepo(repo);
+                  setSelectedBranch(watchMapping.branchName);
+                  
+                  // Fetch branches for the repository
+                  const branchesResponse = await fetch(`http://localhost:3000/branches?repoPath=${encodeURIComponent(repo.path)}`);
+                  if (branchesResponse.ok) {
+                    const branchesData = await branchesResponse.json();
+                    setBranches(branchesData);
+                    
+                    // Trigger analysis after a short delay to allow branches to load
+                    setTimeout(() => {
+                      analyzeRepository();
+                    }, 1000);
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error processing WebSocket message:', error);
+          }
+        };
+
+        websocket.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          setWsConnected(false);
+        };
+
+        websocket.onclose = () => {
+          console.log('Disconnected from WebSocket server');
+          setWsConnected(false);
+          // Attempt to reconnect after 5 seconds
+          reconnectTimeout = setTimeout(connectWebSocket, 5000);
+        };
+      } catch (error) {
+        console.error('Error creating WebSocket connection:', error);
+        setWsConnected(false);
+        // Attempt to reconnect after 5 seconds
+        reconnectTimeout = setTimeout(connectWebSocket, 5000);
+      }
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (websocket) {
+        websocket.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+    };
+  }, [repositories]);
 
   // Fetch repositories on component mount
   useEffect(() => {
@@ -187,8 +275,8 @@ const ReadyScreen = () => {
               className="w-full p-2 rounded bg-gray-800 border border-gray-700"
             >
               <option value="">Choose a repository...</option>
-              {repositories.map((repo) => (
-                <option key={repo.path} value={repo.path}>
+              {repositories.map((repo, index) => (
+                <option key={`${repo.path}-${index}`} value={repo.path}>
                   {repo.name}
                 </option>
               ))}
