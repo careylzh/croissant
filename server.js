@@ -44,46 +44,19 @@ wss.on('connection', (ws) => {
   console.log('Client connected');
 
   ws.on('message', async (message) => {
-    const device = JSON.parse(message);
-    console.log('Received device:', device.deviceName);
+    try {
+      const device = JSON.parse(message);
+      console.log('Received device:', device);
 
-
-    // Ensure deviceMappings.devices is an array
-    if (Array.isArray(deviceMappings.devices)) {
-      const mapping = deviceMappings.devices.find(d => d.deviceName.replace(/[^a-zA-Z]/g, '') == device.deviceName.replace(/[^a-zA-Z]/g, ''));
-      if (mapping) {
-
-        ws.send(JSON.stringify({ type: 'success', message: `Device received: ${device.deviceName}` }));
-
-      } else {
-        ws.send(JSON.stringify({ type: 'error', message: 'Device not recognized' }));
-      }
-    } else {
-      console.error('Device mappings are not in the expected format');
-      ws.send(JSON.stringify({ type: 'error', message: 'Device mappings are not in the expected format' }));
+      // Broadcast the device to all connected clients
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify(device));
+        }
+      });
+    } catch (error) {
+      console.error('Error processing message:', error);
     }
-
-    // Broadcast the device to all connected clients
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(device));
-      }
-    });
-
-    // Save device to the database
-  //   await prisma.device.create({
-  //     data: {
-  //       name: device.deviceName,
-  //       rssi: device.rssi,
-  //       distance: device.distanceProxyInMetres,
-  //       user: {
-  //         connectOrCreate: {
-  //           where: { email: 'default@example.com' }, // Replace with actual user identification logic
-  //           create: { email: 'default@example.com', name: 'Default User' }
-  //         }
-  //       }
-  //     },
-  //   });
   });
 
   ws.on('close', () => {
