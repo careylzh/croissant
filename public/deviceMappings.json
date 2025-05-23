@@ -1,0 +1,16 @@
+{
+  "devices": [
+    {
+      "deviceName": "Carey's Apple Watch",
+      "userFullName": ["Lai", "Zheng", "Hui", "Carey"],
+      "branchName": "feature/cross-device-final-prototype",
+      "repoPath": "/Users/carey/croissant"
+    },
+    {
+      "deviceName": "Simon's iPhone",
+      "userFullName": ["Simon", "Tangi", "Perrault"],
+      "branchName": "simon_perrault@sutd.edu.sg/john-doe",
+      "repoPath": "/Users/carey/croissant"
+    }
+  ]
+} 
