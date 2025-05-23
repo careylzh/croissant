@@ -24,7 +24,7 @@ function App() {
   const dispatch = useDispatch();
 
   useEffect(() => {
-    if (!email) {
+    if (email) {
       // Connect to WebSocket server
       const websocket = new WebSocket('ws://localhost:3000');
       setWs(websocket);
@@ -42,20 +42,26 @@ function App() {
             setLogs((prevLogs) => [...prevLogs, data.message]);
           } else {
             setDevices((prevDevices) => {
-              // Create a new array to ensure state update
               const now = Date.now();
-              const deviceIndex = prevDevices.findIndex(d => d.deviceName === data.deviceName);
-              
-              if (deviceIndex === -1) {
-                // New device
-                console.log('Adding new device:', data.deviceName);
-                return [...prevDevices, { ...data, timestamp: now }];
-              } else {
-                // Update existing device
-                const updatedDevices = [...prevDevices];
-                updatedDevices[deviceIndex] = { ...data, timestamp: now };
-                return updatedDevices;
+              const updatedDevices = prevDevices.map(device => {
+                if (device.deviceName === data.deviceName) {
+                  return { ...device, ...data, timestamp: now };
+                }
+                return device;
+              });
+
+              const isNewDevice = !updatedDevices.some(device => device.deviceName === data.deviceName);
+              if (isNewDevice) {
+                console.log(`New device found: ${data.deviceName}`);
+                updatedDevices.push({ ...data, timestamp: now });
               }
+
+              // Sort devices by distance
+              return updatedDevices.sort((a, b) => {
+                if (!a.distanceProxyInMetres) return 1;
+                if (!b.distanceProxyInMetres) return -1;
+                return a.distanceProxyInMetres - b.distanceProxyInMetres;
+              });
             });
           }
         } catch (error) {
