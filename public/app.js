@@ -20,7 +20,7 @@ function App() {
   const [ws, setWs] = useState(null);
   const [devices, setDevices] = useState([]);
   const [logs, setLogs] = useState([]);
-  const [isReady, setIsReady] = useState(false); // Track if the user is ready
+  const [isReady, setIsReady] = useState(true); // Changed to true to skip BluetoothDevices screen
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -108,32 +108,33 @@ function App() {
   };
 
   if (isReady) {
-    return <ReadyScreen />; // Render the next page
+    return <ReadyScreen />; // This will now be rendered immediately
   }
 
   // if (!email) {
   //   return <Onboarding onEmailSubmit={handleEmailSubmit} />;
   // }
 
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white">
-      <h1 className="text-4xl font-bold mb-6">Bluetooth Connection</h1>
-      <BluetoothDevices 
-        devices={devices} 
-        onFinishSelection={handleDeviceSelection} 
-      />
-      <div className="mt-6 w-full max-w-2xl">
-        <h2 className="text-2xl font-bold mb-4">Logs</h2>
-        <ul className="list-none">
-          {logs.map((log, index) => (
-            <li key={index} className="mb-2 p-2 bg-gray-800 rounded">
-              {log}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
+  // Comment out or remove the BluetoothDevices screen
+  // return (
+  //   <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white">
+  //     <h1 className="text-4xl font-bold mb-6">Bluetooth Connection</h1>
+  //     <BluetoothDevices 
+  //       devices={devices} 
+  //       onFinishSelection={handleDeviceSelection} 
+  //     />
+  //     <div className="mt-6 w-full max-w-2xl">
+  //       <h2 className="text-2xl font-bold mb-4">Logs</h2>
+  //       <ul className="list-none">
+  //         {logs.map((log, index) => (
+  //           <li key={index} className="mb-2 p-2 bg-gray-800 rounded">
+  //             {log}
+  //           </li>
+  //         ))}
+  //       </ul>
+  //     </div>
+  //   </div>
+  // );
 }
 
 root.render(
