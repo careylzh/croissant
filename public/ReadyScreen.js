@@ -17,92 +17,102 @@ const ReadyScreen = () => {
   const [isLoadingCommits, setIsLoadingCommits] = useState(false);
   const [ws, setWs] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
+  const [wsError, setWsError] = useState(null);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const MAX_RECONNECT_ATTEMPTS = 5;
 
-  // Set up WebSocket connection
-  useEffect(() => {
-    let websocket = null;
-    let reconnectTimeout = null;
+  const connectWebSocket = useCallback(() => {
+    try {
+      if (ws) {
+        ws.close();
+      }
 
-    const connectWebSocket = () => {
-      try {
-        websocket = new WebSocket('ws://localhost:3000');
-        setWs(websocket);
+      const websocket = new WebSocket('ws://localhost:3000');
+      setWs(websocket);
 
-        websocket.onopen = () => {
-          console.log('Connected to WebSocket server');
-          setWsConnected(true);
-        };
+      websocket.onopen = () => {
+        console.log('Connected to WebSocket server');
+        setWsConnected(true);
+        setWsError(null);
+        setReconnectAttempts(0);
+      };
 
-        websocket.onmessage = async (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            console.log('Received WebSocket message:', data);
+      websocket.onmessage = async (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('Received WebSocket message:', data);
+          
+          if (data.deviceName === "Carey's Apple Watch") {
+            console.log("Carey's Apple Watch detected, triggering auto-analysis");
             
-            if (data.deviceName === "Carey's Apple Watch") {
-              console.log("Carey's Apple Watch detected, triggering auto-analysis");
-              
-              // Fetch device mappings
-              const response = await fetch('/deviceMappings.json');
-              const mappings = await response.json();
-              const watchMapping = mappings.devices.find(m => m.deviceName === "Carey's Apple Watch");
-              
-              if (watchMapping) {
-                console.log('Found mapping for watch:', watchMapping);
-                // Find the repository object that matches the path
-                const repo = repositories.find(r => r.path === watchMapping.repoPath);
-                if (repo) {
-                  setSelectedRepo(repo);
-                  setSelectedBranch(watchMapping.branchName);
+            // Fetch device mappings
+            const response = await fetch('/deviceMappings.json');
+            const mappings = await response.json();
+            const watchMapping = mappings.devices.find(m => m.deviceName === "Carey's Apple Watch");
+            
+            if (watchMapping) {
+              console.log('Found mapping for watch:', watchMapping);
+              // Find the repository object that matches the path
+              const repo = repositories.find(r => r.path === watchMapping.repoPath);
+              if (repo) {
+                setSelectedRepo(repo);
+                setSelectedBranch(watchMapping.branchName);
+                
+                // Fetch branches for the repository
+                const branchesResponse = await fetch(`http://localhost:3000/branches?repoPath=${encodeURIComponent(repo.path)}`);
+                if (branchesResponse.ok) {
+                  const branchesData = await branchesResponse.json();
+                  setBranches(branchesData);
                   
-                  // Fetch branches for the repository
-                  const branchesResponse = await fetch(`http://localhost:3000/branches?repoPath=${encodeURIComponent(repo.path)}`);
-                  if (branchesResponse.ok) {
-                    const branchesData = await branchesResponse.json();
-                    setBranches(branchesData);
-                    
-                    // Trigger analysis after a short delay to allow branches to load
-                    setTimeout(() => {
-                      analyzeRepository();
-                    }, 1000);
-                  }
+                  // Trigger analysis after a short delay to allow branches to load
+                  setTimeout(() => {
+                    analyzeRepository();
+                  }, 1000);
                 }
               }
             }
-          } catch (error) {
-            console.error('Error processing WebSocket message:', error);
           }
-        };
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
 
-        websocket.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          setWsConnected(false);
-        };
-
-        websocket.onclose = () => {
-          console.log('Disconnected from WebSocket server');
-          setWsConnected(false);
-          // Attempt to reconnect after 5 seconds
-          reconnectTimeout = setTimeout(connectWebSocket, 5000);
-        };
-      } catch (error) {
-        console.error('Error creating WebSocket connection:', error);
+      websocket.onerror = (error) => {
+        console.error('WebSocket error:', error);
         setWsConnected(false);
-        // Attempt to reconnect after 5 seconds
-        reconnectTimeout = setTimeout(connectWebSocket, 5000);
-      }
-    };
+        setWsError('Connection error. Please check if the server is running.');
+      };
 
-    connectWebSocket();
-
-    return () => {
-      if (websocket) {
-        websocket.close();
-      }
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
-    };
+      websocket.onclose = () => {
+        console.log('Disconnected from WebSocket server');
+        setWsConnected(false);
+        setReconnectAttempts(prev => {
+          const newAttempts = prev + 1;
+          if (newAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            setWsError('Failed to connect after multiple attempts. Click "Reconnect" to try again.');
+          } else {
+            setWsError(`Connection lost. Attempting to reconnect (${newAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+            setTimeout(connectWebSocket, 5000);
+          }
+          return newAttempts;
+        });
+      };
+    } catch (error) {
+      console.error('Error creating WebSocket connection:', error);
+      setWsConnected(false);
+      setWsError('Failed to create WebSocket connection. Please check if the server is running.');
+    }
   }, [repositories]);
+
+  // Set up WebSocket connection
+  useEffect(() => {
+    connectWebSocket();
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+    };
+  }, [connectWebSocket]);
 
   // Fetch repositories on component mount
   useEffect(() => {
@@ -262,6 +272,38 @@ const ReadyScreen = () => {
     <div className="flex flex-col items-center min-h-screen bg-gray-900 text-white p-4">
       <h1 className="text-4xl font-bold mb-6">Repository Analysis</h1>
       
+      {/* Connection Status */}
+      <div className="w-full max-w-4xl mb-4">
+        <div className={`p-2 rounded ${
+          wsConnected 
+            ? 'bg-green-500' 
+            : wsError 
+              ? 'bg-red-500' 
+              : 'bg-yellow-500'
+        }`}>
+          <div className="flex justify-between items-center">
+            <p>
+              {wsConnected 
+                ? 'Connected to server' 
+                : wsError 
+                  ? wsError 
+                  : 'Connecting to server...'}
+            </p>
+            {!wsConnected && (
+              <button
+                onClick={() => {
+                  setReconnectAttempts(0);
+                  connectWebSocket();
+                }}
+                className="px-3 py-1 bg-white bg-opacity-20 rounded hover:bg-opacity-30 transition-colors"
+              >
+                Reconnect
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="w-full max-w-4xl space-y-6">
         <div className="grid grid-cols-3 gap-4">
           <div>
