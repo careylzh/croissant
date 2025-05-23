@@ -56,7 +56,7 @@ const ReadyScreen = () => {
         const data = await response.json();
         setBranches(data);
         // Select main branch by default if it exists
-        const mainBranch = data.find(b => b === 'main' || b === 'master');
+        // const mainBranch = data.find(b => b === 'main' || b === 'master');
         if (mainBranch) {
           setSelectedBranch(mainBranch);
         }
