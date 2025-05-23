@@ -82,13 +82,47 @@ const ReadyScreen = () => {
                     console.log('Fetched branches:', branchesData);
                     setBranches(branchesData);
                     
+                    // Fetch commits for the repository and branch
+                    const commitsResponse = await fetch(
+                      `http://localhost:3000/commits?repoPath=${encodeURIComponent(repo.path)}&branchName=${encodeURIComponent(watchMapping.branchName)}`
+                    );
+                    
+                    if (commitsResponse.ok) {
+                      const commitsData = await commitsResponse.json();
+                      console.log('Fetched commits:', commitsData);
+                      
+                      // Find the earliest commit from today
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      
+                      const todayCommits = commitsData.filter(commit => {
+                        const commitDate = new Date(commit.date);
+                        return commitDate >= today;
+                      });
+                      
+                      if (todayCommits.length > 0) {
+                        // Sort by date ascending (earliest first)
+                        todayCommits.sort((a, b) => new Date(a.date) - new Date(b.date));
+                        const earliestCommit = todayCommits[0];
+                        console.log('Selected earliest commit from today:', earliestCommit);
+                        setSelectedCommit(earliestCommit.hash);
+                      } else {
+                        console.log('No commits found from today');
+                      }
+                      
+                      setCommits(commitsData);
+                    } else {
+                      console.error('Failed to fetch commits:', await commitsResponse.text());
+                    }
+                    
                     // Wait for state updates to complete
                     await new Promise(resolve => setTimeout(resolve, 1000));
                     
                     // Trigger analysis
                     console.log('Triggering analysis with:', {
                       repo: repo.path,
-                      branch: watchMapping.branchName
+                      branch: watchMapping.branchName,
+                      commit: selectedCommit
                     });
                     
                     try {
@@ -100,6 +134,7 @@ const ReadyScreen = () => {
                         body: JSON.stringify({
                           repoPath: repo.path,
                           branchName: watchMapping.branchName,
+                          startCommit: selectedCommit || undefined,
                         }),
                       });
 
@@ -115,7 +150,7 @@ const ReadyScreen = () => {
                       setError(error.message);
                     }
                   } else {
-                    console.error('Failed to fetch branches:', await branchesResponse.text());
+                    console.error('Repository not found:', watchMapping.repoPath);
                   }
                 } else {
                   console.error('Repository not found:', watchMapping.repoPath);
