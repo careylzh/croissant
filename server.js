@@ -26,7 +26,7 @@ const server = app.listen(3000, () => {
 });
 
 // Load device mappings
-const deviceMappingsPath = path.join(__dirname, 'deviceMappings.json');
+const deviceMappingsPath = path.join(__dirname, 'public', 'deviceMappings.json');
 let deviceMappings = {};
 
 fs.readFile(deviceMappingsPath, 'utf8', (err, data) => {
