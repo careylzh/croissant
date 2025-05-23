@@ -53,11 +53,17 @@ const ReadyScreen = () => {
               }
               const mappings = await response.json();
               console.log('Loaded device mappings:', mappings);
+              
+              let watchMapping = null;
               if (Array.isArray(mappings.devices)) {
-                const watchMapping = mappings.devices.find(m => m.deviceName.replace(/[^a-zA-Z]/g, '') === "Carey's Apple Watch".replace(/[^a-zA-Z]/g, ''));
+                watchMapping = mappings.devices.find(m => 
+                  m.deviceName.replace(/[^a-zA-Z]/g, '') === "Carey's Apple Watch".replace(/[^a-zA-Z]/g, '')
+                );
                 console.log('Found watch mapping:', watchMapping);
+              } else {
+                console.error('mappings.devices is not an array:', mappings);
+                throw new Error('Invalid device mappings format');
               }
-
               
               if (watchMapping) {
                 // Find the repository object that matches the path
