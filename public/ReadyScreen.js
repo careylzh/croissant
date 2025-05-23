@@ -40,36 +40,86 @@ const ReadyScreen = () => {
       websocket.onmessage = async (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('Received WebSocket message:', data);
+          // console.log('Received WebSocket message on:', data);
           
-          if (data.deviceName === "Carey's Apple Watch") {
+          if (data.deviceName.replace(/[^a-zA-Z]/g, '') === "Carey's Apple Watch".replace(/[^a-zA-Z]/g, '')) {
             console.log("Carey's Apple Watch detected, triggering auto-analysis");
             
-            // Fetch device mappings
-            const response = await fetch('/deviceMappings.json');
-            const mappings = await response.json();
-            const watchMapping = mappings.devices.find(m => m.deviceName === "Carey's Apple Watch");
-            
-            if (watchMapping) {
-              console.log('Found mapping for watch:', watchMapping);
-              // Find the repository object that matches the path
-              const repo = repositories.find(r => r.path === watchMapping.repoPath);
-              if (repo) {
-                setSelectedRepo(repo);
-                setSelectedBranch(watchMapping.branchName);
-                
-                // Fetch branches for the repository
-                const branchesResponse = await fetch(`http://localhost:3000/branches?repoPath=${encodeURIComponent(repo.path)}`);
-                if (branchesResponse.ok) {
-                  const branchesData = await branchesResponse.json();
-                  setBranches(branchesData);
-                  
-                  // Trigger analysis after a short delay to allow branches to load
-                  setTimeout(() => {
-                    analyzeRepository();
-                  }, 1000);
-                }
+            try {
+              // Fetch device mappings
+              const response = await fetch('/deviceMappings.json');
+              if (!response.ok) {
+                throw new Error('Failed to fetch device mappings');
               }
+              const mappings = await response.json();
+              console.log('Loaded device mappings:', mappings);
+              if (Array.isArray(mappings.devices)) {
+                const watchMapping = mappings.devices.find(m => m.deviceName.replace(/[^a-zA-Z]/g, '') === "Carey's Apple Watch".replace(/[^a-zA-Z]/g, ''));
+                console.log('Found watch mapping:', watchMapping);
+              }
+
+              
+              if (watchMapping) {
+                // Find the repository object that matches the path
+                const repo = repositories.find(r => r.path === watchMapping.repoPath);
+                console.log('Found matching repository:', repo);
+                
+                if (repo) {
+                  // Set repository and branch
+                  setSelectedRepo(repo);
+                  setSelectedBranch(watchMapping.branchName);
+                  
+                  // Fetch branches for the repository
+                  const branchesResponse = await fetch(`http://localhost:3000/branches?repoPath=${encodeURIComponent(repo.path)}`);
+                  if (branchesResponse.ok) {
+                    const branchesData = await branchesResponse.json();
+                    console.log('Fetched branches:', branchesData);
+                    setBranches(branchesData);
+                    
+                    // Wait for state updates to complete
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // Trigger analysis
+                    console.log('Triggering analysis with:', {
+                      repo: repo.path,
+                      branch: watchMapping.branchName
+                    });
+                    
+                    try {
+                      const analysisResponse = await fetch('http://localhost:3000/analyze-repo', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          repoPath: repo.path,
+                          branchName: watchMapping.branchName,
+                        }),
+                      });
+
+                      if (!analysisResponse.ok) {
+                        throw new Error('Failed to analyze repository');
+                      }
+
+                      const analysisData = await analysisResponse.json();
+                      console.log('Analysis completed:', analysisData);
+                      setGraphData(analysisData);
+                    } catch (error) {
+                      console.error('Error during analysis:', error);
+                      setError(error.message);
+                    }
+                  } else {
+                    console.error('Failed to fetch branches:', await branchesResponse.text());
+                  }
+                } else {
+                  console.error('Repository not found:', watchMapping.repoPath);
+                }
+              } else {
+                console.error('Watch mapping not found in device mappings');
+              }
+            } catch (error) {
+              console.error('Error in auto-analysis flow:', error);
+              setError(error.message);
             }
           }
         } catch (error) {
