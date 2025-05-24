@@ -245,11 +245,6 @@ const ReadyScreen = () => {
         }
         const data = await response.json();
         setBranches(data);
-        // Select main branch by default if it exists
-        const mainBranch = data.find(b => b === 'main' || b === 'master');
-        if (mainBranch) {
-          setSelectedBranch(mainBranch);
-        }
       } catch (err) {
         setError(err.message);
       } finally {
@@ -258,7 +253,7 @@ const ReadyScreen = () => {
     };
 
     fetchBranches();
-  }, [selectedRepo]);
+  }, [selectedRepo?.path]);
 
   // Fetch commits when branch is selected
   useEffect(() => {
@@ -289,9 +284,14 @@ const ReadyScreen = () => {
     };
 
     fetchCommits();
-  }, [selectedRepo, selectedBranch]);
+  }, [selectedRepo?.path, selectedBranch]);
 
-  const analyzeRepository = async () => {
+  // Reset graph data when branch changes
+  useEffect(() => {
+    setGraphData(null);
+  }, [selectedBranch]);
+
+  const analyzeRepository = useCallback(async () => {
     if (!selectedRepo || !selectedBranch) return;
 
     setIsAnalyzing(true);
@@ -322,7 +322,7 @@ const ReadyScreen = () => {
     } finally {
       setIsAnalyzing(false);
     }
-  };
+  }, [selectedRepo?.path, selectedBranch, selectedCommit]);
 
   const handleNodeClick = useCallback(async (node) => {
     try {
