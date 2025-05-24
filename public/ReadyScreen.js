@@ -140,14 +140,14 @@ const ReadyScreen = () => {
                       });
 
                       if (!analysisResponse.ok) {
-                        throw new Error('Failed to analyze repository');
+                        throw new Error('Failed to analyze repository during auto-analysis');
                       }
 
                       const analysisData = await analysisResponse.json();
                       console.log('Analysis completed:', analysisData);
                       setGraphData(analysisData);
                     } catch (error) {
-                      console.error('Error during analysis:', error);
+                      console.error('Error during auto-analysis:', error);
                       setError(error.message);
                     }
                   } else {
@@ -312,7 +312,7 @@ const ReadyScreen = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to analyze repository');
+        throw new Error('Failed to analyze repository during manual analysis');
       }
 
       const data = await response.json();
