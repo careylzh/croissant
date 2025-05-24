@@ -262,7 +262,7 @@ app.get('/branches', async (req, res) => {
 
 // Modified analyze-repo endpoint to handle commit-based analysis
 app.post('/analyze-repo', async (req, res) => {
-  const { repoPath, branchName, startCommit } = req.body;
+  const { repoPath, branchName, startCommit, baseBranch } = req.body;
 
   if (!repoPath || !branchName) {
     return res.status(400).json({ error: 'Repository path and branch name are required' });
@@ -310,8 +310,8 @@ app.post('/analyze-repo', async (req, res) => {
         const { stdout: changedFiles } = await execAsync(`git diff --name-only ${startCommit} HEAD`);
         changedFilesList = changedFiles.split('\n').filter(Boolean);
       } else {
-        // If no start commit, get changes between main and current branch
-        const { stdout: changedFiles } = await execAsync(`git diff --name-only main HEAD`);
+        // If no start commit, get changes between base branch and current branch
+        const { stdout: changedFiles } = await execAsync(`git diff --name-only ${baseBranch || 'main'} HEAD`);
         changedFilesList = changedFiles.split('\n').filter(Boolean);
       }
     } catch (diffError) {
@@ -329,7 +329,7 @@ app.post('/analyze-repo', async (req, res) => {
         const { stdout } = await execAsync(`git log --pretty=format:"%H|%an|%ad|%s" ${startCommit}..HEAD`);
         commitHistory = stdout;
       } else {
-        const { stdout } = await execAsync(`git log --pretty=format:"%H|%an|%ad|%s" main..HEAD`);
+        const { stdout } = await execAsync(`git log --pretty=format:"%H|%an|%ad|%s" ${baseBranch || 'main'}..HEAD`);
         commitHistory = stdout;
       }
     } catch (logError) {

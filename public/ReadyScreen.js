@@ -135,6 +135,7 @@ const ReadyScreen = () => {
                           repoPath: repo.path,
                           branchName: watchMapping.branchName,
                           startCommit: selectedCommit || undefined,
+                          baseBranch: 'main'
                         }),
                       });
 
@@ -245,7 +246,7 @@ const ReadyScreen = () => {
         const data = await response.json();
         setBranches(data);
         // Select main branch by default if it exists
-        // const mainBranch = data.find(b => b === 'main' || b === 'master');
+        const mainBranch = data.find(b => b === 'main' || b === 'master');
         if (mainBranch) {
           setSelectedBranch(mainBranch);
         }
@@ -306,6 +307,7 @@ const ReadyScreen = () => {
           repoPath: selectedRepo.path,
           branchName: selectedBranch,
           startCommit: selectedCommit || undefined,
+          baseBranch: 'main'
         }),
       });
 
