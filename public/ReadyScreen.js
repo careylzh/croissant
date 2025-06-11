@@ -42,8 +42,9 @@ const ReadyScreen = () => {
           const data = JSON.parse(event.data);
           // console.log('Received WebSocket message on:', data);
           
-          if (data.deviceName.replace(/[^a-zA-Z]/g, '') === "Carey's Apple Watch".replace(/[^a-zA-Z]/g, '')) {
-            console.log("Carey's Apple Watch detected, triggering auto-analysis");
+          if (data.deviceName.replace(/[^a-zA-Z]/g, '') === "Carey's Apple Watch".replace(/[^a-zA-Z]/g, '') && 
+              data.distanceProxyInMetres <= 1) {
+            console.log("Carey's Apple Watch detected within 1m, triggering auto-analysis");
             
             try {
               // Fetch device mappings
