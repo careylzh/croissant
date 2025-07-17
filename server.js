@@ -272,22 +272,30 @@ app.post('/analyze-repo', async (req, res) => {
     // Change to the repository directory
     await execAsync(`cd "${repoPath}"`);
 
-    // Stash any local changes before switching branches
+    // Always reset and checkout main branch before analysis
     try {
-      await execAsync('git stash');
-    } catch (stashError) {
-      console.log('No changes to stash or stash failed:', stashError.message);
+      await execAsync('git reset --hard HEAD');
+      await execAsync('git checkout main');
+      // Optionally: await execAsync('git pull');
+    } catch (resetError) {
+      console.error('Failed to reset or checkout main:', resetError.message);
+      return res.status(500).json({ 
+        error: 'Failed to reset or checkout main',
+        details: resetError.message
+      });
     }
 
-    // Switch to the specified branch
-    try {
-      await execAsync(`git checkout ${branchName}`);
-    } catch (checkoutError) {
-      console.error('Failed to checkout branch:', checkoutError.message);
-      return res.status(500).json({ 
-        error: 'Failed to switch branches',
-        details: checkoutError.message
-      });
+    // If a different branch is requested, switch to it
+    if (branchName !== 'main') {
+      try {
+        await execAsync(`git checkout ${branchName}`);
+      } catch (checkoutError) {
+        console.error('Failed to checkout branch:', checkoutError.message);
+        return res.status(500).json({ 
+          error: 'Failed to switch branches',
+          details: checkoutError.message
+        });
+      }
     }
 
     // If a start commit is provided, verify it exists
