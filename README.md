@@ -23,3 +23,8 @@ npm run build
 npm run build css 
 npm start
 ```
+
+Note: As this system involves triggering git checkouts locally with the use of the code review dashboard, you need to reset after every execution.
+```
+cd ~/croissant
+ git reset --hard HEAD
