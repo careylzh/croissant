@@ -17,14 +17,19 @@ sdk use java 17.0.9-tem
 cd /opt/sonarqube
 ./bin/macosx-universal-64/sonar.sh start
 
-#install nodeJS dependencies and run
+#install dependencies
 npm i
 npm run build
 npm run build css 
+
+#run
+./bin/macosx-universal-64/sonar.sh console
 npm start
+
 ```
 
 Note: As this system involves triggering git checkouts locally with the use of the code review dashboard, you need to reset after every execution.
 ```
 cd ~/croissant
  git reset --hard HEAD
+ 
