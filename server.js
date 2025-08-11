@@ -539,14 +539,39 @@ app.post('/security-scan', async (req, res) => {
     // Wait for analysis to complete and get results
     await new Promise(resolve => setTimeout(resolve, 5000));
     
+    // Generate the project key that was used in the scan
+    const projectKey = `croissant-security-${Date.now()}`;
+    
     // Fetch vulnerabilities from SonarQube API
+    console.log('Fetching vulnerabilities for project:', projectKey);
     const { stdout: vulnerabilitiesResponse } = await execAsync(
-      'curl -s "http://localhost:9000/api/issues/search?componentKeys=croissant-security&types=VULNERABILITY&ps=500"'
+      `curl -s "http://localhost:9000/api/issues/search?componentKeys=${projectKey}&types=VULNERABILITY&ps=500"`
     );
 
-    const vulnerabilities = JSON.parse(vulnerabilitiesResponse);
+    console.log('Raw API response:', vulnerabilitiesResponse);
+    
+    // Validate response before parsing
+    let vulnerabilities;
+    if (!vulnerabilitiesResponse || vulnerabilitiesResponse.trim() === '') {
+      console.log('Empty response from SonarQube API, creating empty vulnerability list');
+      vulnerabilities = { issues: [] };
+    } else {
+      try {
+        vulnerabilities = JSON.parse(vulnerabilitiesResponse);
+      } catch (parseError) {
+        console.error('Failed to parse SonarQube API response:', parseError);
+        console.error('Response content:', vulnerabilitiesResponse);
+        // Create empty vulnerabilities object if parsing fails
+        vulnerabilities = { issues: [] };
+      }
+    }
     
     // Process and format vulnerability data
+    if (!vulnerabilities.issues || !Array.isArray(vulnerabilities.issues)) {
+      console.log('No issues array found in vulnerabilities response, using empty array');
+      vulnerabilities.issues = [];
+    }
+    
     const formattedVulnerabilities = vulnerabilities.issues.map(issue => ({
       severity: issue.severity,
       type: issue.type,
