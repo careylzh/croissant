@@ -527,13 +527,13 @@ app.post('/security-scan', async (req, res) => {
     } catch (error) {
       // Start SonarQube if not running
       console.log('Starting SonarQube...');
-      await execAsync('sonar-scanner -Dsonar.projectKey=croissant-security -Dsonar.sources=. -Dsonar.host.url=http://localhost:9000');
+      await execAsync('sonar-scanner -Dsonar.projectKey=croissant-security -Dsonar.sources=. -Dsonar.host.url=http://localhost:9000 -Dsonar.login=admin -Dsonar.password=admin');
     }
 
     // Run SonarQube analysis
     console.log('Running SonarQube analysis...');
     const { stdout: scanOutput } = await execAsync(
-      `sonar-scanner -Dsonar.projectKey=croissant-security-${Date.now()} -Dsonar.sources=. -Dsonar.host.url=http://localhost:9000`
+      `sonar-scanner -Dsonar.projectKey=croissant-security-${Date.now()} -Dsonar.sources=. -Dsonar.host.url=http://localhost:9000 -Dsonar.login=admin -Dsonar.password=admin`
     );
 
     // Wait for analysis to complete and get results
