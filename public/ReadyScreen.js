@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import * as d3 from 'd3';
+import SecurityScanner from './SecurityScanner';
 
 const ReadyScreen = () => {
   const [repositories, setRepositories] = useState([]);
@@ -349,6 +350,17 @@ const ReadyScreen = () => {
               </div>
             </div>
           </>
+        )}
+
+        {/* Security Scanner Section */}
+        {selectedRepo && selectedBranch && (
+          <SecurityScanner 
+            repoPath={selectedRepo.path}
+            branchName={selectedBranch}
+            onScanComplete={(data) => {
+              console.log('Security scan completed:', data);
+            }}
+          />
         )}
       </div>
     </div>

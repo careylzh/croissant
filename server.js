@@ -496,3 +496,136 @@ app.post('/open-file', async (req, res) => {
     res.status(500).json({ error: 'Failed to open file' });
   }
 });
+
+// Security scanning endpoints
+app.post('/security-scan', async (req, res) => {
+  const { repoPath, branchName } = req.body;
+
+  if (!repoPath || !branchName) {
+    return res.status(400).json({ error: 'Repository path and branch name are required' });
+  }
+
+  try {
+    // Change to the repository directory
+    await execAsync(`cd "${repoPath}"`);
+    
+    // Checkout the specified branch
+    await execAsync(`git checkout ${branchName}`);
+    
+    // Check if SonarQube is running
+    try {
+      await execAsync('curl -s http://localhost:9000/api/system/status');
+    } catch (error) {
+      // Start SonarQube if not running
+      console.log('Starting SonarQube...');
+      await execAsync('sonar-scanner -Dsonar.projectKey=croissant-security -Dsonar.sources=. -Dsonar.host.url=http://localhost:9000');
+    }
+
+    // Run SonarQube analysis
+    console.log('Running SonarQube analysis...');
+    const { stdout: scanOutput } = await execAsync(
+      `sonar-scanner -Dsonar.projectKey=croissant-security-${Date.now()} -Dsonar.sources=. -Dsonar.host.url=http://localhost:9000`
+    );
+
+    // Wait for analysis to complete and get results
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    // Fetch vulnerabilities from SonarQube API
+    const { stdout: vulnerabilitiesResponse } = await execAsync(
+      'curl -s "http://localhost:9000/api/issues/search?componentKeys=croissant-security&types=VULNERABILITY&ps=500"'
+    );
+
+    const vulnerabilities = JSON.parse(vulnerabilitiesResponse);
+    
+    // Process and format vulnerability data
+    const formattedVulnerabilities = vulnerabilities.issues.map(issue => ({
+      severity: issue.severity,
+      type: issue.type,
+      filePath: issue.component.replace('croissant-security:', ''),
+      lineNumber: issue.line,
+      shortDescription: issue.message,
+      detailedDescription: issue.message,
+      suggestedFix: getSuggestedFix(issue.rule),
+      ruleId: issue.rule,
+      firstDetected: issue.creationDate,
+      lastSeen: issue.updateDate,
+      status: issue.status
+    }));
+
+    // Save scan metadata to local file
+    const scanMetadata = {
+      timestamp: new Date().toISOString(),
+      repoPath,
+      branchName,
+      scanDuration: '30s',
+      vulnerabilitiesFound: formattedVulnerabilities.length,
+      scanOutput: scanOutput
+    };
+
+    fs.appendFileSync('security-scan-history.txt', JSON.stringify(scanMetadata) + '\n');
+
+    res.json({
+      success: true,
+      vulnerabilities: formattedVulnerabilities,
+      metadata: scanMetadata
+    });
+
+  } catch (error) {
+    console.error('Error during security scan:', error);
+    res.status(500).json({ 
+      error: 'Security scan failed',
+      details: error.message 
+    });
+  }
+});
+
+// Helper function to get suggested fixes based on rule type
+function getSuggestedFix(ruleId) {
+  const fixSuggestions = {
+    'sql-injection': 'Use parameterized queries or prepared statements',
+    'xss': 'Escape HTML output or use React\'s built-in XSS protection',
+    'hardcoded-secret': 'Move secrets to environment variables or secure configuration',
+    'default': 'Review the code and implement appropriate security measures'
+  };
+  
+  return fixSuggestions[ruleId] || fixSuggestions.default;
+}
+
+// Endpoint to get scan history
+app.get('/security-scan-history', async (req, res) => {
+  try {
+    if (fs.existsSync('security-scan-history.txt')) {
+      const history = fs.readFileSync('security-scan-history.txt', 'utf8')
+        .split('\n')
+        .filter(line => line.trim())
+        .map(line => JSON.parse(line))
+        .reverse(); // Most recent first
+      
+      res.json(history);
+    } else {
+      res.json([]);
+    }
+  } catch (error) {
+    console.error('Error reading scan history:', error);
+    res.status(500).json({ error: 'Failed to read scan history' });
+  }
+});
+
+// Endpoint to check SonarQube status
+app.get('/sonarqube-status', async (req, res) => {
+  try {
+    const { stdout } = await execAsync('curl -s http://localhost:9000/api/system/status');
+    const status = JSON.parse(stdout);
+    res.json({ 
+      status: status.status,
+      version: status.version,
+      running: true
+    });
+  } catch (error) {
+    res.json({ 
+      status: 'stopped',
+      running: false,
+      error: error.message
+    });
+  }
+});
