@@ -213,3 +213,4 @@ const SecurityScanner = ({ repoPath, branchName, onScanComplete }) => {
 };
 
 export default SecurityScanner;
+

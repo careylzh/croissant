@@ -200,3 +200,4 @@ docker restart sonarqube
 ---
 
 **Note**: This security scanner is designed for development and testing purposes. For production use, ensure proper security measures and consider enterprise SonarQube solutions.
+
