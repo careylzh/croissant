@@ -525,27 +525,26 @@ app.post('/security-scan', async (req, res) => {
     try {
       await execAsync('curl -s http://localhost:9000/api/system/status');
     } catch (error) {
-      // Start SonarQube if not running
-      console.log('Starting SonarQube...');
-      await execAsync('sonar-scanner -Dsonar.projectKey=croissant-security -Dsonar.sources=. -Dsonar.host.url=http://localhost:9000 -Dsonar.login=admin -Dsonar.password=admin');
+      return res.status(503).json({
+        error: 'SonarQube is not reachable at http://localhost:9000',
+        details: error.message
+      });
     }
 
     // Run SonarQube analysis
-    console.log('Running SonarQube analysis...');
+    const projectKey = `croissant-security-${Date.now()}`;
+    console.log('Running SonarQube analysis with projectKey:', projectKey);
     const { stdout: scanOutput } = await execAsync(
-      `sonar-scanner -Dsonar.projectKey=croissant-security-${Date.now()} -Dsonar.sources=. -Dsonar.host.url=http://localhost:9000 -Dsonar.login=admin -Dsonar.password=admin`
+      `sonar-scanner -Dsonar.projectKey=${projectKey} -Dsonar.sources=. -Dsonar.host.url=http://localhost:9000 -Dsonar.login=admin -Dsonar.password=admin`
     );
 
     // Wait for analysis to complete and get results
     await new Promise(resolve => setTimeout(resolve, 5000));
     
-    // Generate the project key that was used in the scan
-    const projectKey = `croissant-security-${Date.now()}`;
-    
     // Fetch vulnerabilities from SonarQube API
     console.log('Fetching vulnerabilities for project:', projectKey);
     const { stdout: vulnerabilitiesResponse } = await execAsync(
-      `curl -s "http://localhost:9000/api/issues/search?componentKeys=${projectKey}&types=VULNERABILITY&ps=500"`
+      `curl -s -u admin:admin "http://localhost:9000/api/issues/search?componentKeys=${projectKey}&types=VULNERABILITY&ps=500"`
     );
 
     console.log('Raw API response:', vulnerabilitiesResponse);
@@ -575,7 +574,7 @@ app.post('/security-scan', async (req, res) => {
     const formattedVulnerabilities = vulnerabilities.issues.map(issue => ({
       severity: issue.severity,
       type: issue.type,
-      filePath: issue.component.replace('croissant-security:', ''),
+      filePath: issue.component.replace(`${projectKey}:`, ''),
       lineNumber: issue.line,
       shortDescription: issue.message,
       detailedDescription: issue.message,
