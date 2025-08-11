@@ -500,17 +500,26 @@ app.post('/open-file', async (req, res) => {
 // Security scanning endpoints
 app.post('/security-scan', async (req, res) => {
   const { repoPath, branchName } = req.body;
+  
+  console.log('Security scan request received:', { repoPath, branchName });
+  console.log('Full request body:', req.body);
 
   if (!repoPath || !branchName) {
     return res.status(400).json({ error: 'Repository path and branch name are required' });
   }
 
   try {
+    console.log('Starting security scan for repo:', repoPath, 'branch:', branchName);
+    
     // Change to the repository directory
+    console.log('Changing to repository directory:', repoPath);
     await execAsync(`cd "${repoPath}"`);
+    console.log('Successfully changed to repository directory');
     
     // Checkout the specified branch
+    console.log('Checking out branch:', branchName);
     await execAsync(`git checkout ${branchName}`);
+    console.log('Successfully checked out branch:', branchName);
     
     // Check if SonarQube is running
     try {
@@ -572,9 +581,13 @@ app.post('/security-scan', async (req, res) => {
 
   } catch (error) {
     console.error('Error during security scan:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Request body:', req.body);
     res.status(500).json({ 
       error: 'Security scan failed',
-      details: error.message 
+      details: error.message,
+      stack: error.stack,
+      requestBody: req.body
     });
   }
 });
